@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout benchmark harness
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Java 21
         uses: actions/setup-java@v4
@@ -55,8 +57,36 @@ jobs:
           tar -xJf benchmark/sources.tar.xz -C benchmark/sources
           python -m py_compile benchmark/sources/v012/jacoco_skill/*.py
           python -m py_compile benchmark/sources/v014/jacoco_skill/*.py
-          cat benchmark/run_benchmark.py.b64.* | base64 --decode > benchmark/run_benchmark.py
+
+          # Reconstruct the previously verified runner from a stable commit, then
+          # patch only the Maven command so public projects use their own JaCoCo
+          # agent binding instead of receiving a duplicate javaagent.
+          for chunk in 00 01 02 03; do
+            git show fd86ad7e1b563361a3968654869070c8531be22a:benchmark/run_benchmark.py.b64.${chunk}
+          done | base64 --decode > benchmark/run_benchmark.py
           echo "d419b813ed965dd3c0582c55054f30f99f8c1ec42aa0d76e394c9c3ad6b0ed00  benchmark/run_benchmark.py" | sha256sum -c -
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('benchmark/run_benchmark.py')
+          text = path.read_text()
+          old = '''    cmd += [
+                  f"org.jacoco:jacoco-maven-plugin:{JACOCO_VERSION}:prepare-agent",
+                  "test",
+                  f"org.jacoco:jacoco-maven-plugin:{JACOCO_VERSION}:report",
+              ]
+          '''
+          new = '''    # Use the repository's own JaCoCo agent binding. Adding a second explicit
+              # prepare-agent can crash the forked JVM with duplicate $JaCoCo classes.
+              cmd += [
+                  "test",
+                  "jacoco:report",
+              ]
+          '''
+          if old not in text:
+              raise SystemExit('Expected Maven command block was not found')
+          path.write_text(text.replace(old, new))
+          PY
+          echo "24101571812f8bdc249daa4a872497a009fa5096d6dae7d87f4a9d28ab0cce74  benchmark/run_benchmark.py" | sha256sum -c -
           chmod +x benchmark/run_benchmark.py
           python -m py_compile benchmark/run_benchmark.py
 
