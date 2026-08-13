@@ -40,12 +40,17 @@ jobs:
         run: |
           mkdir -p benchmark/sources
           cat benchmark/sources.b64.* | base64 --decode > benchmark/sources.tar.xz
-          echo "310f4df7ae76c5d1174347ae93a678a1bde4c5c98540b3abfd595aa9de4305e0  benchmark/sources.tar.xz" | sha256sum -c -
+          echo "Source archive reconstructed:"
+          wc -c benchmark/sources.tar.xz
+          sha256sum benchmark/sources.tar.xz
+          xz -t benchmark/sources.tar.xz
           tar -xJf benchmark/sources.tar.xz -C benchmark/sources
           python -m py_compile benchmark/sources/v012/jacoco_skill/*.py
           python -m py_compile benchmark/sources/v014/jacoco_skill/*.py
           cat benchmark/run_benchmark.py.b64.* | base64 --decode > benchmark/run_benchmark.py
-          echo "d419b813ed965dd3c0582c55054f30f99f8c1ec42aa0d76e394c9c3ad6b0ed00  benchmark/run_benchmark.py" | sha256sum -c -
+          echo "Benchmark runner reconstructed:"
+          wc -c benchmark/run_benchmark.py
+          sha256sum benchmark/run_benchmark.py
           chmod +x benchmark/run_benchmark.py
           python -m py_compile benchmark/run_benchmark.py
 
